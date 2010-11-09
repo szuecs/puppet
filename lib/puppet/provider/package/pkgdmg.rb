@@ -100,8 +100,14 @@ Puppet::Type.type(:package).provide :pkgdmg, :parent => Puppet::Provider::Packag
     end
     
     def try_curl(cached_source, source, name)
-      curl "-o", cached_source, "-C", "-", "-k", "-s", "--url", source
-      Puppet.debug "Success: curl transfered [#{name}]"
+      begin
+        curl "-o", cached_source, "-C", "-", "--capath", Puppet[:certdir], "--cacert", Puppet[:localcacert], "-s", "-S", "--url", source
+        Puppet.debug "Success: curl cert validated transfer [#{name}]"
+      rescue Puppet::ExecutionFailure
+        Puppet.warning "Transfer with curl will not being validated [#{name}]"
+        curl "-o", cached_source, "-C", "-", "-k", "-s", "--url", source
+        Puppet.debug "Success: curl insecure transfer [#{name}]"
+      end
     end
     
     def install_dmg(cached_source, source, name)
