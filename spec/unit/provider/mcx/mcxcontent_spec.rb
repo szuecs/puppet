@@ -98,23 +98,23 @@ describe provider_class do
       @resource.stubs(:[]).with(:name).returns "/Foo/bar"
     end
     it "should not accept /Foo/bar" do
-      lambda { @provider.create }.should raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should raise_error(Puppet::Error)
     end
     it "should accept /Foo/bar with ds_type => user" do
       @resource.stubs(:[]).with(:ds_type).returns "user"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept /Foo/bar with ds_type => group" do
       @resource.stubs(:[]).with(:ds_type).returns "group"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept /Foo/bar with ds_type => computer" do
       @resource.stubs(:[]).with(:ds_type).returns "computer"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept :name => /Foo/bar with ds_type => computerlist" do
       @resource.stubs(:[]).with(:ds_type).returns "computerlist"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
   end
 
@@ -123,40 +123,40 @@ describe provider_class do
       @resource.stubs(:[]).with(:name).returns "foobar"
     end
     it "should not accept unspecified :ds_type and :ds_name" do
-      lambda { @provider.create }.should raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should raise_error(Puppet::Error)
     end
     it "should not accept unspecified :ds_type" do
       @resource.stubs(:[]).with(:ds_type).returns "user"
-      lambda { @provider.create }.should raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should raise_error(Puppet::Error)
     end
     it "should not accept unspecified :ds_name" do
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should raise_error(Puppet::Error)
     end
     it "should accept :ds_type => user, ds_name => foo" do
       @resource.stubs(:[]).with(:ds_type).returns "user"
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept :ds_type => group, ds_name => foo" do
       @resource.stubs(:[]).with(:ds_type).returns "group"
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept :ds_type => computer, ds_name => foo" do
       @resource.stubs(:[]).with(:ds_type).returns "computer"
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should accept :ds_type => computerlist, ds_name => foo" do
       @resource.stubs(:[]).with(:ds_type).returns "computerlist"
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should_not raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should_not raise_error(Puppet::Error)
     end
     it "should not accept :ds_type => bogustype, ds_name => foo" do
       @resource.stubs(:[]).with(:ds_type).returns "bogustype"
       @resource.stubs(:[]).with(:ds_name).returns "foo"
-      lambda { @provider.create }.should raise_error(MCXContentProviderException)
+      lambda { @provider.create }.should raise_error(Puppet::Error)
     end
   end
 

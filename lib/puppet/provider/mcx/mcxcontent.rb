@@ -45,58 +45,92 @@ Puppet::Type.type(:mcx).provide :mcxcontent, :parent => Puppet::Provider do
     :computerlist => "ComputerLists",
   }
 
-  class MCXContentProviderException < Exception
-
-  end
-
   commands :dscl => "/usr/bin/dscl"
   confine :operatingsystem => :darwin
   defaultfor :operatingsystem => :darwin
-
-  # self.instances is all important.
-  # This is the only class method, it returns
-  # an array of instances of this class.
-  def self.instances
-    mcx_list = []
-    for ds_type in TypeMap.keys
-      ds_path = "/Local/Default/#{TypeMap[ds_type]}"
-      output = dscl 'localhost', '-list', ds_path
-      member_list = output.split
-      for ds_name in member_list
-        content = mcxexport(ds_type, ds_name)
-        if content.empty?
-          Puppet.debug "/#{TypeMap[ds_type]}/#{ds_name} has no MCX data."
-        else
-          # This node has MCX data.
-
-            rsrc = self.new(
+  
+  # FIXME: dslocal name is fixed. The default should be "Default" if we do not 
+  # want to break existing installations.
+  DSLOCAL_DIR = "Default"
+  
+  class << self
+    # It returns an array of instances of this class.
+    def instances
+      mcx_list = []
+      TypeMap.keys.each do |ds_type|
+        ds_path = "/Local/#{DSLOCAL_DIR}/#{TypeMap[ds_type]}"
+        output = dscl 'localhost', '-list', ds_path
+        member_list = output.split
+        member_list.each do |ds_name|
+          content = mcxexport(ds_type, ds_name)
+          if content.empty?
+            Puppet.debug "/#{TypeMap[ds_type]}/#{ds_name} has no MCX data."
+          else
+            # This node has MCX data.
+            mcx_list << self.new(
               :name => "/#{TypeMap[ds_type]}/#{ds_name}",
-                :ds_type => ds_type,
-                :ds_name => ds_name,
-
-                :content => content)
-          mcx_list << rsrc
+              :ds_type => ds_type,
+              :ds_name => ds_name,
+              :content => content)
+          end
         end
       end
+      mcx_list
     end
-    mcx_list
+
+    def mcxexport(ds_type, ds_name)
+      ds_t = TypeMap[ds_type]
+      ds_n = ds_name.to_s
+      ds_path = "/Local/#{DSLOCAL_DIR}/#{ds_t}/#{ds_n}"
+      dscl 'localhost', '-mcxexport', ds_path
+    end
+  end
+  
+  public
+
+  def create
+    self.content=(resource[:content])
   end
 
+  def destroy
+    ds_parms = get_dsparams
+    ds_t = TypeMap[ds_parms[:ds_type]]
+    ds_n = ds_parms[:ds_name].to_s
+    ds_path = "/Local/#{DSLOCAL_DIR}/#{ds_t}/#{ds_n}"
+
+    dscl 'localhost', '-mcxdelete', ds_path
+  end
+
+  def exists?
+    begin
+      has_mcx?
+    rescue Puppet::ExecutionFailure => e
+      return false
+    end
+  end
+
+  def content
+    ds_parms = get_dsparams
+
+    self.class.mcxexport(ds_parms[:ds_type], ds_parms[:ds_name])
+  end
+
+  def content=(value)
+    # dscl localhost -mcximport
+    ds_parms = get_dsparams
+
+    mcximport(ds_parms[:ds_type], ds_parms[:ds_name], resource[:content])
+  end
+  
   private
-
-  # mcxexport is used by instances, and therefore
-  # a class method.
-  def self.mcxexport(ds_type, ds_name)
-    ds_t = TypeMap[ds_type]
-    ds_n = ds_name.to_s
-    ds_path = "/Local/Default/#{ds_t}/#{ds_n}"
-    dscl 'localhost', '-mcxexport', ds_path
+  
+  def has_mcx?
+    !content.empty?
   end
-
+  
   def mcximport(ds_type, ds_name, val)
     ds_t = TypeMap[ds_type]
-    ds_n = ds_name.to_s
-    ds_path = "/Local/Default/#{ds_t}/#{ds_name}"
+    ds_path = "/Local/#{DSLOCAL_DIR}/#{ds_t}/#{ds_name}"
 
     tmp = Tempfile.new('puppet_mcx')
     begin
@@ -111,95 +145,45 @@ Puppet::Type.type(:mcx).provide :mcxcontent, :parent => Puppet::Provider do
 
   # Given the resource name string, parse ds_type out.
   def parse_type(name)
-    tmp = name.split('/')[1]
-    if ! tmp.is_a? String
-      raise MCXContentProviderException,
-      "Coult not parse ds_type from resource name '#{name}'.  Specify with ds_type parameter."
+    ds_type = name.split('/')[1]
+    unless ds_type
+      error("Could not parse ds_type from resource name '#{name}'. Specify with ds_type parameter.")
     end
     # De-pluralize and downcase.
-    tmp = tmp.chop.downcase.to_sym
-    if not TypeMap.keys.member? tmp
-      raise MCXContentProviderException,
-      "Coult not parse ds_type from resource name '#{name}'.  Specify with ds_type parameter."
+    ds_type = ds_type.chop.downcase.to_sym
+    unless TypeMap.key? ds_type
+      error("Could not parse ds_type from resource name '#{name}'. Specify with ds_type parameter.")
     end
-    tmp
+    ds_type
   end
 
   # Given the resource name string, parse ds_name out.
   def parse_name(name)
     ds_name = name.split('/')[2]
-    if ! ds_name.is_a? String
-      raise MCXContentProviderException,
-      "Could not parse ds_name from resource name '#{name}'.  Specify with ds_name parameter."
+    unless ds_name
+      error("Could not parse ds_name from resource name '#{name}'. Specify with ds_name parameter.")
     end
     ds_name
   end
 
-  # Gather ds_type and ds_name from resource or
-  # parse it out of the name.
-  # This is a private instance method, not a class method.
+  # Gather ds_type and ds_name from resource or parse it out of the name.
   def get_dsparams
     ds_type = resource[:ds_type]
     ds_type ||= parse_type(resource[:name])
-    raise MCXContentProviderException unless TypeMap.keys.include? ds_type.to_sym
+    unless TypeMap.key? ds_type.to_sym
+      raise Puppet::Error.new("#{ds_type} is not a key in TypeMap") 
+    end
 
     ds_name = resource[:ds_name]
     ds_name ||= parse_name(resource[:name])
 
-    rval = {
+    {
       :ds_type => ds_type.to_sym,
       :ds_name => ds_name,
     }
-
-    return rval
-
   end
-
-  public
-
-  def create
-    self.content=(resource[:content])
+  
+  def error(msg)
+    raise Puppet::Error.new(msg)
   end
-
-  def destroy
-    ds_parms = get_dsparams
-    ds_t = TypeMap[ds_parms[:ds_type]]
-    ds_n = ds_parms[:ds_name].to_s
-    ds_path = "/Local/Default/#{ds_t}/#{ds_n}"
-
-    dscl 'localhost', '-mcxdelete', ds_path
-  end
-
-  def exists?
-    # JJM Just re-use the content method and see if it's empty.
-    begin
-      mcx = content
-    rescue Puppet::ExecutionFailure => e
-      return false
-    end
-    has_mcx = ! mcx.empty?
-  end
-
-  def content
-    ds_parms = get_dsparams
-
-      mcx = self.class.mcxexport(
-        ds_parms[:ds_type],
-
-          ds_parms[:ds_name])
-    mcx
-  end
-
-  def content=(value)
-    # dscl localhost -mcximport
-    ds_parms = get_dsparams
-
-      mcx = mcximport(
-        ds_parms[:ds_type],
-          ds_parms[:ds_name],
-
-          resource[:content])
-    mcx
-  end
-
 end
